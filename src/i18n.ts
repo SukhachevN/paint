@@ -1,8 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { desktop } from './desktop';
 import { invoke } from '@tauri-apps/api/core';
+import pt from './locales/pt';
+import es from './locales/es';
+import fr from './locales/fr';
+import de from './locales/de';
+import nl from './locales/nl';
 
-export type Language = 'ru' | 'en';
+export const languages = [
+  { code: 'en', name: 'English' },
+  { code: 'ru', name: 'Русский' },
+  { code: 'pt', name: 'Português' },
+  { code: 'es', name: 'Español' },
+  { code: 'fr', name: 'Français' },
+  { code: 'de', name: 'Deutsch' },
+  { code: 'nl', name: 'Nederlands' },
+] as const;
+export type Language = typeof languages[number]['code'];
 export type LanguagePreference = Language | 'system';
 const preferenceKey = 'paint-language-v1';
 export const en = {
@@ -209,20 +223,25 @@ const ru: Record<MessageKey, string> = {
   "resizeHint": "Потяни для изменения размера. Стрелки: 1 px, Shift: 10 px. Escape отменяет."
 };
 
+const dictionaries: Record<Language, Record<MessageKey, string>> = { en, ru, pt, es, fr, de, nl };
+function isLanguage(value: string | null): value is Language {
+  return languages.some(({ code }) => code === value);
+}
 export function systemLanguage(locale = navigator.language): Language {
-  return locale.toLowerCase().split(/[-_]/)[0] === 'ru' ? 'ru' : 'en';
+  const primary = locale.toLowerCase().split(/[-_]/)[0];
+  return isLanguage(primary) ? primary : 'en';
 }
 function readPreference(): LanguagePreference {
   try {
     const saved = localStorage.getItem(preferenceKey);
-    return saved === 'ru' || saved === 'en' ? saved : 'system';
+    return isLanguage(saved) ? saved : 'system';
   } catch { return 'system'; }
 }
 export function useLanguage() {
   const [preference, setPreference] = useState<LanguagePreference>(readPreference);
   const [system, setSystem] = useState(systemLanguage);
   const language = preference === 'system' ? system : preference;
-  const t = useCallback((key: MessageKey): string => (language === 'ru' ? ru : en)[key], [language]);
+  const t = useCallback((key: MessageKey): string => dictionaries[language][key], [language]);
   const chooseLanguage = (next: LanguagePreference) => {
     setPreference(next);
     try { localStorage.setItem(preferenceKey, next); } catch { /* Still works for this session. */ }
