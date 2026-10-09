@@ -30,7 +30,7 @@ Completed improvements:
 - Separate eraser sizing and clearing the entire canvas with undo.
 - Immediate object bounds when selecting and dragging.
 - Canvas resizing from any part of the right or bottom edge, with automatic scrolling beyond the window, preview, cancellation and undo/redo.
-- English and Russian UI, system-language detection and persistent manual selection.
+- English, Russian, Portuguese, Spanish, French, German and Dutch UI, system-language detection and persistent manual selection.
 
 Future improvements:
 

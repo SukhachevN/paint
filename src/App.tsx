@@ -8,7 +8,7 @@ import type { LucideIcon } from 'lucide-react';
 import Shape from './Shape';
 import CanvasResize from './CanvasResize';
 import { floodFill } from './floodFill';
-import { useLanguage } from './i18n';
+import { languages, useLanguage } from './i18n';
 import type { MessageKey, LanguagePreference } from './i18n';
 import { desktop, readClipboardImage, writeClipboardImage, savePng } from './desktop';
 import { blank, isDocument } from './model';
@@ -315,7 +315,7 @@ export default function App() {
     <header className="header">
       <div className="brand"><span className="brand-icon"><Pencil size={21} /></span><div><h1>paint<span className="brand-dot">.</span></h1><span className="brand-caption">{t('tagline')}</span></div></div>
       <div className="document-name">{t('untitled')} <span className="tag">{t('local')}</span></div>
-      <div className="header-actions"><label className="language-control"><select aria-label={t('language')} value={preference} onChange={e => chooseLanguage(e.target.value as LanguagePreference)}><option value="system">{t('systemLanguage')}</option><option value="ru">Русский</option><option value="en">English</option></select></label><button className="button subtle" onClick={copy} disabled={!ready || busy || filling}><Copy size={16} /><span>{t('copy')}</span></button><button className="button primary" onClick={download} disabled={!ready || busy || filling}><Download size={16} /><span>{t('savePng')}</span></button></div>
+      <div className="header-actions"><label className="language-control"><select aria-label={t('language')} value={preference} onChange={e => chooseLanguage(e.target.value as LanguagePreference)}><option value="system">{t('systemLanguage')}</option>{languages.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}</select></label><button className="button subtle" onClick={copy} disabled={!ready || busy || filling}><Copy size={16} /><span>{t('copy')}</span></button><button className="button primary" onClick={download} disabled={!ready || busy || filling}><Download size={16} /><span>{t('savePng')}</span></button></div>
     </header>
     <div className="toolbar">
       <div className="toolbar-section"><button className="button" onClick={() => setDialog('new')} disabled={!ready}><Plus size={17} />{t('new')}</button><button className="button" onClick={() => input.current?.click()} disabled={!ready || busy || filling}><FileImage size={17} />{t('open')}</button><button className="button" onClick={pasteButton} disabled={!ready || busy || filling}><ImagePlus size={17} />{t('paste')} <kbd>⌘ / Ctrl V</kbd></button></div>

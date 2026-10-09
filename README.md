@@ -17,7 +17,7 @@ A local drawing app for quick diagrams and screenshot annotations, inspired by M
 - Undo/redo for the last 50 actions, including canvas size changes.
 - Save or copy a PNG at the document's original resolution, without selection handles or UI.
 - Automatically save one draft locally and restore it when reopening the app.
-- English and Russian UI. The default follows the primary system/browser language: Russian for `ru`, English otherwise. Manual language selection is remembered.
+- English, Russian, Portuguese, Spanish, French, German and Dutch UI. The default follows the primary system/browser language, including regional variants such as `pt-BR`, `es-MX` and `fr-CA`. Unsupported languages fall back to English. Manual language selection is remembered.
 
 An empty canvas adopts the first pasted image's dimensions, capped at 4096 px. Subsequent images fit within the current canvas. The maximum input file size is 30 MB.
 
