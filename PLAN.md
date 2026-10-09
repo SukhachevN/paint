@@ -1,48 +1,58 @@
-# План реализации Paint
+# Paint implementation plan
 
-## Цель
+## Goal
 
-Быстро нарисовать простую схему или вставить скриншот, обвести нужное и скопировать/сохранить результат. Минимум действий между запуском и рисунком.
+Quickly sketch a simple diagram or paste a screenshot, annotate it, and copy or save the result. Keep the number of steps between launching the app and drawing as small as possible.
 
-## Выбор стека
+## Stack
 
-**React + TypeScript + Vite + Konva.** React — интерфейс, Konva — Canvas и работа с объектами, TypeScript — модель документа и инструменты. IndexedDB хранит локальный черновик. На первом этапе не нужны backend, авторизация и синхронизация.
+**React + TypeScript + Vite + Konva.** React handles the UI, Konva handles canvas rendering and object interaction, and TypeScript defines the document model and tools. IndexedDB stores a local draft. No backend, authentication or synchronization is required for the first version.
 
-Объектная модель удобна для схем: стрелку, подпись или изображение можно двигать и масштабировать после добавления. PNG формируется при экспорте. Для полноценного пиксельного Paint в дальнейшем понадобится отдельный растровый слой.
+An object-based document works well for diagrams: arrows, labels and images can be moved or resized after creation. PNGs are generated on export. A fully pixel-oriented editor would require a dedicated raster layer in the future.
 
-## Этап 1 — рабочая первая версия (реализовано)
+## Phase 1 — working first version (completed)
 
-1. Холст, инструменты, палитра, толщина и масштаб.
-2. Кисть, ластик пометок, фигуры, стрелки и текст.
-3. Буфер обмена, файл и перетаскивание изображений.
-4. Выделение, перенос, размер, вращение и удаление объектов.
-5. Отмена и повтор, новый холст с заданными размерами.
-6. PNG и копирование PNG в буфер.
-7. Один локальный черновик в IndexedDB.
-8. Проверка сборки и интеграционных сценариев в Chrome.
+1. Canvas, tools, palette, stroke thickness and zoom.
+2. Brush, annotation eraser, shapes, arrows and text.
+3. Image import through the clipboard, file picker and drag-and-drop.
+4. Object selection, movement, scaling, rotation and deletion.
+5. Undo/redo and a new canvas with custom dimensions.
+6. PNG export and copying PNGs to the clipboard.
+7. One locally saved draft in IndexedDB.
+8. Build checks and integration tests in Chrome.
 
-## Этап 2 — удобство ежедневного использования
+## Phase 2 — everyday usability
 
-- Сохранение/открытие редактируемого проекта, несколько черновиков.
-- Обрезка изображения, пипетка, заливка фигур, пунктир и маркер.
-- Заливка фигур реализована: контур/заливка/оба, цвет заливки и изменение выделенной фигуры.
-- Изменение цвета/толщины выделенного объекта, порядок объектов.
-- Панорамирование, колесо для масштаба, полноценная поддержка touch.
-- Фокус внутри модальных окон и дополнительная проверка доступности.
-- PWA с service worker для установки и работы офлайн.
+Completed improvements:
 
-## Этап 3 — отдельное приложение на macOS (реализовано)
+- Shape outline, fill or both, with a separate fill color and editing of selected shapes.
+- Paint bucket for connected regions on drawings and imported images.
+- Separate eraser sizing and clearing the entire canvas with undo.
+- Immediate object bounds when selecting and dragging.
+- Canvas resizing from any part of the right or bottom edge, with automatic scrolling beyond the window, preview, cancellation and undo/redo.
+- English and Russian UI, system-language detection and persistent manual selection.
 
-- Tauri с тем же интерфейсом.
-- Системный буфер изображений и файловый диалог сохранения PNG.
-- Иконка и самостоятельный Paint.app для Apple Silicon.
-- Открытие изображений из Finder, DMG-установщик и подпись для распространения — будущие улучшения.
+Future improvements:
 
-## Критерии первой версии
+- Save and open editable projects; support multiple drafts.
+- Image cropping, eyedropper, dashed strokes and a highlighter.
+- Edit the color and thickness of selected objects; change object stacking order.
+- Panning, wheel-based zoom and full touch support.
+- Focus management within dialogs and additional accessibility checks.
+- PWA installation and offline use through a service worker.
 
-- Вставить скриншот → нарисовать стрелку и круг → сохранить PNG.
-- Undo/redo возвращает ожидаемые объекты.
-- Ластик не повреждает подложку.
-- Экспорт сохраняет исходные размеры независимо от масштаба просмотра.
-- После перезагрузки восстановлен последний сохранённый черновик.
-- Приложение запускается из своей папки командой npm run dev.
+## Phase 3 — standalone macOS app (completed)
+
+- Tauri wrapper using the same editor UI.
+- Native image clipboard and PNG save dialog.
+- App icon and a standalone Paint.app for Apple Silicon.
+- Opening images from Finder, a DMG installer and distribution signing remain future improvements.
+
+## First-version acceptance criteria
+
+- Paste a screenshot, draw an arrow and a circle, then save a PNG.
+- Undo/redo restores the expected objects.
+- The eraser preserves the original image.
+- Export retains document dimensions regardless of view zoom.
+- Reopening restores the latest saved draft.
+- The web app starts from its project directory with `npm run dev`.
