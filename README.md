@@ -1,5 +1,9 @@
 # Paint
 
+<p align="center">
+  <img src="docs/assets/paint-logo.png" alt="Hand-drawn Paint logo — pencil and lettering drawn with the brush" width="480">
+</p>
+
 A local drawing app for quick diagrams and screenshot annotations, inspired by Microsoft Paint. Runs in a browser or as a standalone macOS app.
 
 ## Features
