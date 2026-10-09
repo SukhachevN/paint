@@ -2,6 +2,8 @@
 
 A local drawing app for quick diagrams and screenshot annotations, inspired by Microsoft Paint. Runs in a browser or as a standalone macOS app.
 
+[Русская документация](README.ru.md)
+
 ## Features
 
 - Brush, eraser, paint bucket, lines, arrows, rectangles, ellipses and text.
@@ -89,4 +91,4 @@ Browser clipboard buttons depend on API support and permissions; HTTPS is requir
 
 ## Roadmap
 
-See [PLAN.md](PLAN.md) for the implementation plan and future ideas. The web and macOS versions share the same editor.
+See [PLAN.md](PLAN.md) for the implementation plan and future ideas (in Russian). The web and macOS versions share the same editor.
