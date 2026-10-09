@@ -1,0 +1,21 @@
+[package]
+name = "paint-desktop"
+version = "0.1.0"
+description = "Paint — быстрые рисунки и пометки"
+edition = "2021"
+rust-version = "1.90"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["image-png"] }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSLocale", "NSArray", "NSString"] }
+
+[profile.release]
+strip = true
