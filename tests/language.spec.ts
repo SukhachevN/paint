@@ -32,7 +32,8 @@ test.describe('manual language preference', () => {
     await page.getByRole('button', { name: 'Text', exact: true }).click();
     const box = (await page.locator('.canvas-wrap').boundingBox())!;
     await page.mouse.click(box.x + 220, box.y + 120);
-    await expect(page.getByRole('heading', { name: 'Add text' })).toBeVisible();
+    await expect(page.locator('.inline-text-editor')).toBeFocused();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.getByLabel('Canvas text').fill('Мой текст / my text');
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await page.locator('.language-control select').selectOption('ru');
@@ -100,7 +101,8 @@ for (const [language, saved, help, title, dismiss, newButton, newTitle, cancel, 
     await page.getByRole('button', { name: textTool, exact: true }).click();
     const box = (await page.locator('.canvas-wrap').boundingBox())!;
     await page.mouse.click(box.x + 100, box.y + 100);
-    await expect(page.getByRole('heading', { name: addText, exact: true })).toBeVisible();
+    await expect(page.locator('.inline-text-editor')).toBeFocused();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.getByLabel(canvasText, { exact: true }).fill('Olá / ¡Hola! / Bonjour / Grüße / Hallo');
     await page.getByRole('button', { name: done, exact: true }).click();
     await expect(page.getByText(saved, { exact: true })).toBeVisible();

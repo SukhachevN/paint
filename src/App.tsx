@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Layer, Rect, Stage, Transformer } from 'react-konva';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { get, set } from 'idb-keyval';
-import { ArrowUpRight, Check, ChevronDown, Circle, Copy, Download, Eraser, FileImage, HelpCircle, ImagePlus, Maximize, Minus, MousePointer2, PaintBucket, Pencil, Plus, Redo2, Square, Trash2, Type, Undo2, X } from 'lucide-react';
+import { ArrowUpRight, Check, Circle, Copy, Download, Eraser, FileImage, HelpCircle, ImagePlus, Maximize, Minus, MousePointer2, PaintBucket, Pencil, Plus, Redo2, Square, Trash2, Type, Undo2, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Shape from './Shape';
 import CanvasResize from './CanvasResize';
+import InlineTextEditor from './InlineTextEditor';
+import FontSizeInput from './FontSizeInput';
 import { floodFill } from './floodFill';
 import { languages, useLanguage } from './i18n';
 import type { MessageKey, LanguagePreference } from './i18n';
@@ -28,7 +30,8 @@ const tools: { id: Tool; label: MessageKey; key: string; icon: LucideIcon }[] = 
 const colors = ['#202938', '#ffffff', '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
 const storageKey = 'paint-draft-v1';
 type History = { doc: Document; past: Document[]; future: Document[] };
-type TextEdit = { x: number; y: number; value: string; id?: string };
+type TextEdit = { item: Item; value: string; existing: boolean };
+const fonts = ['Arial', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New', 'Trebuchet MS'];
 const isInput = (target: EventTarget | null) => target instanceof HTMLElement && (!!target.closest('input, textarea, select, [contenteditable="true"]'));
 
 export default function App() {
@@ -44,6 +47,12 @@ export default function App() {
   const [shapeStyle, setShapeStyle] = useState<ShapeStyle>('outline');
   const [fillColor, setFillColor] = useState('#bfdbfe');
   const [zoom, setZoom] = useState(0.75);
+  const zoomRef = useRef(zoom); zoomRef.current = zoom;
+  const zoomAnchor = useRef<{ x: number; y: number; clientX: number; clientY: number } | null>(null);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const pan = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const [fontSize, setFontSize] = useState(26);
+  const [fontFamily, setFontFamily] = useState('Arial');
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState<Item | null>(null);
   const draftRef = useRef<Item | null>(null);
@@ -103,7 +112,67 @@ export default function App() {
   };
   const fit = useCallback((w = historyRef.current.doc.width, h = historyRef.current.doc.height) => {
     const area = viewport.current;
-    if (area) setZoom(Math.max(0.1, Math.min(1, (area.clientWidth - 96) / w, (area.clientHeight - 96) / h)));
+    if (area) { zoomAnchor.current = null; area.scrollLeft = 0; area.scrollTop = 0; setZoom(Math.max(0.1, Math.min(1, (area.clientWidth - 96) / w, (area.clientHeight - 96) / h))); }
+  }, []);
+
+  const zoomTo = useCallback((value: number, clientX?: number, clientY?: number) => {
+    const next = Math.max(0.1, Math.min(3, value));
+    if (next === zoomRef.current) return;
+    const area = viewport.current, canvas = area?.querySelector('.canvas-wrap');
+    if (!area || !canvas) return;
+    const bounds = canvas.getBoundingClientRect(), areaBounds = area.getBoundingClientRect();
+    const cx = clientX ?? areaBounds.left + area.clientWidth / 2;
+    const cy = clientY ?? areaBounds.top + area.clientHeight / 2;
+    zoomAnchor.current = { x: (cx - bounds.left) / zoomRef.current, y: (cy - bounds.top) / zoomRef.current, clientX: cx, clientY: cy };
+    setZoom(next);
+  }, []);
+  useLayoutEffect(() => {
+    const anchor = zoomAnchor.current, area = viewport.current;
+    if (!anchor || !area) return;
+    const bounds = area.querySelector('.canvas-wrap')!.getBoundingClientRect();
+    area.scrollLeft += bounds.left + anchor.x * zoom - anchor.clientX;
+    area.scrollTop += bounds.top + anchor.y * zoom - anchor.clientY;
+    zoomAnchor.current = null;
+  }, [zoom]);
+  useEffect(() => {
+    const area = viewport.current;
+    if (!area) return;
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey && !event.altKey) return;
+      event.preventDefault();
+      if (draftRef.current || pan.current) return;
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? area.clientHeight : 1);
+      zoomTo(zoomRef.current * Math.exp(-delta * 0.01), event.clientX, event.clientY);
+    };
+    // WebKit (including the macOS app) reports trackpad pinch as GestureEvents.
+    let gesture: { zoom: number; x: number; y: number } | null = null;
+    const gestureStart = (event: Event) => {
+      event.preventDefault();
+      if (draftRef.current || pan.current) return;
+      const e = event as Event & { clientX: number; clientY: number };
+      gesture = { zoom: zoomRef.current, x: e.clientX, y: e.clientY };
+    };
+    const gestureChange = (event: Event) => {
+      event.preventDefault();
+      if (gesture) zoomTo(gesture.zoom * (event as Event & { scale: number }).scale, gesture.x, gesture.y);
+    };
+    const gestureEnd = () => { gesture = null; };
+    area.addEventListener('wheel', wheel, { passive: false });
+    area.addEventListener('gesturestart', gestureStart, { passive: false });
+    area.addEventListener('gesturechange', gestureChange, { passive: false });
+    area.addEventListener('gestureend', gestureEnd);
+    return () => {
+      area.removeEventListener('wheel', wheel);
+      area.removeEventListener('gesturestart', gestureStart);
+      area.removeEventListener('gesturechange', gestureChange);
+      area.removeEventListener('gestureend', gestureEnd);
+    };
+  }, [zoomTo]);
+  useEffect(() => {
+    const release = () => { setSpaceHeld(false); pan.current = null; };
+    const up = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false); };
+    window.addEventListener('keyup', up); window.addEventListener('blur', release);
+    return () => { window.removeEventListener('keyup', up); window.removeEventListener('blur', release); };
   }, []);
 
   useEffect(() => {
@@ -220,10 +289,16 @@ export default function App() {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { setDialog(null); setTextEdit(null); setSelected(null); draftRef.current = null; setDraft(null); return; }
-      if (!ready || isInput(e.target) || dialog || textEdit) return;
       const mod = e.metaKey || e.ctrlKey;
+      if (ready && !dialog && mod && ['+', '=', '-', '0'].includes(e.key)) {
+        e.preventDefault();
+        if (e.key === '0') fit(); else zoomTo(zoomRef.current * (e.key === '-' ? 1 / 1.2 : 1.2));
+        return;
+      }
+      if (!ready || isInput(e.target) || dialog || textEdit) return;
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
       else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+      else if (e.code === 'Space') { e.preventDefault(); setSpaceHeld(true); }
       else if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); void download(); }
       else if (desktop && mod && e.key.toLowerCase() === 'v') { e.preventDefault(); void pasteNative(); }
       else if (desktop && mod && e.key.toLowerCase() === 'c') { e.preventDefault(); void copy(); }
@@ -231,7 +306,7 @@ export default function App() {
       else if (!mod && !e.altKey) { const next = tools.find(t => t.key.toLowerCase() === e.key.toLowerCase()); if (next) { setTool(next.id); setSelected(null); } }
     };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
-  }, [redo, undo, download, remove, dialog, textEdit, ready, pasteNative, copy]);
+  }, [redo, undo, download, remove, dialog, textEdit, ready, pasteNative, copy, fit, zoomTo]);
 
   const pointer = () => {
     const s = stage.current; const p = s?.getPointerPosition();
@@ -239,11 +314,11 @@ export default function App() {
   };
   const pointerDown = (event: KonvaEventObject<PointerEvent>) => {
     if (!ready || busy || fillPending.current || textEdit || event.evt.button !== 0) return;
-    if (tool === 'select') { if (event.target === stage.current || event.target.id() === 'background') setSelected(null); return; }
+    if (tool === 'select' || (tool === 'text' && event.target.id() && event.target.id() !== 'background')) { if (event.target === stage.current || event.target.id() === 'background') setSelected(null); return; }
     const p = pointer(); if (!p) return;
     setSelected(null);
     if (tool === 'bucket') { void fillAt(p.x, p.y); return; }
-    if (tool === 'text') { setTextEdit({ ...p, value: '' }); return; }
+    if (tool === 'text') { event.evt.preventDefault(); setTextEdit({ item: { id: crypto.randomUUID(), type: 'text', ...p, text: '', color, width, fontSize, fontFamily }, value: '', existing: false }); return; }
     origin.current = p;
     const item: Item = { id: crypto.randomUUID(), type: tool, ...p, color, width: strokeWidth, points: [0, 0, 0.01, 0.01], w: 0, h: 0, ...((tool === 'rect' || tool === 'ellipse') ? { shapeStyle, fillColor } : {}) };
     draftRef.current = item; setDraft(item);
@@ -294,18 +369,44 @@ export default function App() {
     if ((item.type === 'rect' || item.type === 'ellipse') && ((item.w ?? 0) < 1 || (item.h ?? 0) < 1)) return;
     commit(d => ({ ...d, items: [...d.items, item] }));
   };
-  const confirmText = () => {
+  const confirmText = useCallback(() => {
     if (!textEdit) return;
-    const value = textEdit.value.trim();
-    if (value) {
-      if (textEdit.id) change(textEdit.id, { text: value });
-      else commit(d => ({ ...d, items: [...d.items, { id: crypto.randomUUID(), type: 'text', x: textEdit.x, y: textEdit.y, text: value, color, width }] }));
+    const { item, value, existing } = textEdit;
+    if (value.trim()) {
+      const next = { ...item, text: value };
+      if (existing) change(item.id, next);
+      else commit(d => ({ ...d, items: [...d.items, next] }));
+      setSelected(item.id); setTool('select');
+    } else if (existing) {
+      commit(d => ({ ...d, items: d.items.filter(i => i.id !== item.id) }));
+      setSelected(null);
     }
     setTextEdit(null);
+  }, [textEdit, change, commit]);
+  useEffect(() => {
+    if (!textEdit) return;
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Element && !event.target.closest('.inline-text-editor, .properties')) confirmText();
+    };
+    document.addEventListener('pointerdown', outside, true);
+    return () => document.removeEventListener('pointerdown', outside, true);
+  }, [textEdit, confirmText]);
+  const editText = (item: Item) => {
+    setSelected(null);
+    setTextEdit({ item: { ...item }, value: item.text ?? '', existing: true });
   };
   const activeTool = tools.find(t => t.id === tool)!;
-  const empty = doc.items.length === 0 && !draft;
+  const empty = doc.items.length === 0 && !draft && !textEdit;
   const selectedItem = doc.items.find(i => i.id === selected);
+  const selectedText = selectedItem?.type === 'text' ? selectedItem : undefined;
+  const shownText = textEdit?.item ?? selectedText;
+  const showTextOptions = tool === 'text' || !!shownText;
+  const shownColor = shownText?.color ?? color;
+  const updateTextStyle = (changes: Partial<Item>) => {
+    if (textEdit) setTextEdit({ ...textEdit, item: { ...textEdit.item, ...changes } });
+    else if (selectedText) change(selectedText.id, changes);
+  };
+  const chooseColor = (value: string) => { setColor(value); updateTextStyle({ color: value }); };
   const selectedShape = selectedItem && (selectedItem.type === 'rect' || selectedItem.type === 'ellipse') ? selectedItem : undefined;
   const showShapeOptions = tool === 'rect' || tool === 'ellipse' || !!selectedShape;
   const shownStyle = selectedShape ? selectedShape.shapeStyle ?? 'outline' : shapeStyle;
@@ -326,23 +427,32 @@ export default function App() {
     <main className="main">
       <aside className="tools" aria-label={t('tools')}>{tools.map(({ id, label, key, icon: Icon }) => <button key={id} className={`tool ${tool === id ? 'active' : ''}`} aria-label={t(label)} aria-pressed={tool === id} title={`${t(label)} (${key})`} onClick={() => { setTool(id); setSelected(null); }}><Icon size={21} strokeWidth={1.8}/><span className="tool-tooltip">{t(label)}<kbd>{key}</kbd></span></button>)}<div className="tool-divider"/><button className="tool" aria-label={t('openImage')} title={t('openImage')} onClick={() => input.current?.click()}><ImagePlus size={21} strokeWidth={1.8}/></button></aside>
       <section className="workspace">
-        <div className="properties"><span className="property-label">{t(activeTool.label)}</span><span className="separator"/><div className="palette" aria-label={t('color')}>{colors.map(c => <button key={c} className={`swatch ${color === c ? 'chosen' : ''}`} style={{ background: c }} aria-label={`${t('color')} ${c}`} aria-pressed={color === c} onClick={() => setColor(c)}>{color === c && <Check size={12} color={c === '#ffffff' || c === '#eab308' ? '#202938' : '#fff'}/>}</button>)}<label className="custom-color" title={t('customColor')}><input aria-label={t('customColor')} type="color" value={color} onChange={e => setColor(e.target.value)}/><Plus size={12}/></label></div>{tool !== 'bucket' && <><span className="separator"/><label className="width-control"><span>{t(tool === 'eraser' ? 'eraserSize' : 'thickness')}</span><input aria-label={t(tool === 'eraser' ? 'eraserSize' : 'thickness')} type="range" min="1" max={tool === 'eraser' ? 512 : 32} value={strokeWidth} onChange={e => (tool === 'eraser' ? setEraserWidth : setWidth)(Number(e.target.value))}/><input className="width-number" aria-label={t(tool === 'eraser' ? 'eraserSize' : 'thickness')} type="number" min="1" max={tool === 'eraser' ? 512 : 32} value={strokeWidth} onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n)) (tool === 'eraser' ? setEraserWidth : setWidth)(Math.max(1, Math.min(tool === 'eraser' ? 512 : 32, n))); }}/><span>px</span></label></>}
+        <div className="properties"><span className="property-label">{t(activeTool.label)}</span><span className="separator"/><div className="palette" aria-label={t('color')}>{colors.map(c => <button key={c} className={`swatch ${shownColor === c ? 'chosen' : ''}`} style={{ background: c }} aria-label={`${t('color')} ${c}`} aria-pressed={shownColor === c} onClick={() => chooseColor(c)}>{shownColor === c && <Check size={12} color={c === '#ffffff' || c === '#eab308' ? '#202938' : '#fff'}/>}</button>)}<label className="custom-color" title={t('customColor')}><input aria-label={t('customColor')} type="color" value={shownColor} onChange={e => chooseColor(e.target.value)}/><Plus size={12}/></label></div>{tool !== 'bucket' && !showTextOptions && <><span className="separator"/><label className="width-control"><span>{t(tool === 'eraser' ? 'eraserSize' : 'thickness')}</span><input aria-label={t(tool === 'eraser' ? 'eraserSize' : 'thickness')} type="range" min="1" max={tool === 'eraser' ? 512 : 32} value={strokeWidth} onChange={e => (tool === 'eraser' ? setEraserWidth : setWidth)(Number(e.target.value))}/><input className="width-number" aria-label={t(tool === 'eraser' ? 'eraserSize' : 'thickness')} type="number" min="1" max={tool === 'eraser' ? 512 : 32} value={strokeWidth} onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n)) (tool === 'eraser' ? setEraserWidth : setWidth)(Math.max(1, Math.min(tool === 'eraser' ? 512 : 32, n))); }}/><span>px</span></label></>}
+          {showTextOptions && <div className="text-options"><span className="separator"/><label>{t('fontFamily')}<select aria-label={t('fontFamily')} value={shownText?.fontFamily ?? fontFamily} onChange={e => { setFontFamily(e.target.value); updateTextStyle({ fontFamily: e.target.value }); }}>{fonts.map(font => <option key={font} value={font} style={{ fontFamily: font }}>{font}</option>)}</select></label><label>{t('fontSize')}<FontSizeInput label={t('fontSize')} value={shownText?.fontSize ?? (shownText ? shownText.width * 2 + 18 : fontSize)} onChange={size => { setFontSize(size); if (size !== (shownText?.fontSize ?? (shownText ? shownText.width * 2 + 18 : fontSize))) updateTextStyle({ fontSize: size }); }}/ ><span>px</span></label>{textEdit && <><button className="button primary" onClick={confirmText}><Check size={15}/>{t('done')}</button><button className="icon-button" aria-label={t('cancel')} onClick={() => setTextEdit(null)}><X size={16}/></button></>}{selectedText && <button className="button" onClick={() => editText(selectedText)}>{t('editText')}</button>}</div>}
           {showShapeOptions && <div className="shape-options"><span className="separator"/><label><span>{t('shape')}</span><select aria-label={t('shapeStyle')} value={shownStyle} onChange={e => { const style = e.target.value as ShapeStyle; setShapeStyle(style); if (selectedShape) change(selectedShape.id, { shapeStyle: style }); }}><option value="outline">{t('outline')}</option><option value="fill">{t('fill')}</option><option value="both">{t('outlineFill')}</option></select></label>{shownStyle !== 'outline' && <label className="fill-picker"><span>{t('fill')}</span><input aria-label={t('fillColor')} type="color" value={shownFill} onChange={e => { setFillColor(e.target.value); if (selectedShape) change(selectedShape.id, { fillColor: e.target.value }); }}/></label>}</div>}
         </div>
-        <div className={`viewport ${dragOver ? 'drag-over' : ''}`} ref={viewport} onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }} onDrop={e => { e.preventDefault(); setDragOver(false); const f = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/')); if (f && ready) void importImage(f); else notify('dropFile'); }}>
-          <div className="canvas-wrap" style={{ width: doc.width * zoom, height: doc.height * zoom }}><Stage ref={stage} width={doc.width * zoom} height={doc.height * zoom} scaleX={zoom} scaleY={zoom} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { draftRef.current = null; setDraft(null); }} style={{ cursor: tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair', touchAction: 'none' }}>
-            <Layer><Rect id="background" width={doc.width} height={doc.height} fill="white"/>{doc.items.filter(i => i.type === 'image').map(item => <Shape key={item.id} item={item} movable={tool === 'select'} onSelect={selectItem} onChange={change} onEdit={i => setTextEdit({ x: i.x, y: i.y, value: i.text ?? '', id: i.id })}/>)}</Layer>
-            <Layer>{doc.items.filter(i => i.type !== 'image').map(item => <Shape key={item.id} item={item} movable={tool === 'select'} onSelect={selectItem} onChange={change} onEdit={i => setTextEdit({ x: i.x, y: i.y, value: i.text ?? '', id: i.id })}/>)}{draft && <Shape item={draft} movable={false} onSelect={() => {}} onChange={() => {}} onEdit={() => {}}/>}</Layer>
+        <div className={`viewport ${dragOver ? 'drag-over' : ''}`} ref={viewport} onPointerDownCapture={e => {
+          if (e.button !== 1 && !(e.button === 0 && spaceHeld)) return;
+          if (e.target instanceof Element && e.target.closest('textarea, input, button')) return;
+          e.preventDefault(); e.stopPropagation();
+          pan.current = { x: e.clientX, y: e.clientY, left: e.currentTarget.scrollLeft, top: e.currentTarget.scrollTop };
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }} onPointerMoveCapture={e => {
+          if (!pan.current) return;
+          e.stopPropagation(); e.currentTarget.scrollLeft = pan.current.left + pan.current.x - e.clientX; e.currentTarget.scrollTop = pan.current.top + pan.current.y - e.clientY;
+        }} onPointerUpCapture={e => { if (pan.current) { e.stopPropagation(); pan.current = null; e.currentTarget.releasePointerCapture(e.pointerId); } }} onPointerCancel={() => { pan.current = null; }} onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }} onDrop={e => { e.preventDefault(); setDragOver(false); const f = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/')); if (f && ready) void importImage(f); else notify('dropFile'); }}>
+          <div className="canvas-wrap" style={{ width: doc.width * zoom, height: doc.height * zoom }}><Stage ref={stage} width={doc.width * zoom} height={doc.height * zoom} scaleX={zoom} scaleY={zoom} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { draftRef.current = null; setDraft(null); }} style={{ cursor: spaceHeld ? 'grab' : tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair', touchAction: 'none' }}>
+            <Layer><Rect id="background" width={doc.width} height={doc.height} fill="white"/>{doc.items.filter(i => i.type === 'image').map(item => <Shape key={item.id} item={item} movable={!textEdit && (tool === 'select' || (tool === 'text' && item.type === 'text'))} onSelect={selectItem} onChange={change} onEdit={editText}/>)}</Layer>
+            <Layer>{doc.items.filter(i => i.type !== 'image' && i.id !== textEdit?.item.id).map(item => <Shape key={item.id} item={item} movable={!textEdit && (tool === 'select' || (tool === 'text' && item.type === 'text'))} onSelect={selectItem} onChange={change} onEdit={editText}/>)}{draft && <Shape item={draft} movable={false} onSelect={() => {}} onChange={() => {}} onEdit={() => {}}/>}</Layer>
             <Layer><Transformer ref={transformer} rotateEnabled={true} borderStroke="#3b82f6" anchorStroke="#3b82f6" anchorFill="white" anchorSize={8} padding={5} flipEnabled={false} boundBoxFunc={(oldBox, newBox) => Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5 ? oldBox : newBox}/></Layer>
-          </Stage>{empty && <div className="empty-state"><div className="empty-icon"><Pencil size={28} strokeWidth={1.5}/></div><h2>{t('emptyTitle')}</h2><p>{t('emptyLine1')}<br/>{t('emptyLine2')}</p><div className="empty-shortcut"><kbd>⌘ / Ctrl</kbd><span>+</span><kbd>V</kbd><span>{t('pasteImage')}</span></div></div>}<CanvasResize width={doc.width} height={doc.height} zoom={zoom} disabled={!ready || busy || filling || !!dialog || !!textEdit} onResize={resizeCanvas} t={t}/></div>
+          </Stage>{textEdit && <InlineTextEditor key={textEdit.item.id} item={textEdit.item} value={textEdit.value} zoom={zoom} onChange={value => setTextEdit({ ...textEdit, value })} onConfirm={confirmText} onCancel={() => setTextEdit(null)} t={t}/>}{empty && <div className="empty-state"><div className="empty-icon"><Pencil size={28} strokeWidth={1.5}/></div><h2>{t('emptyTitle')}</h2><p>{t('emptyLine1')}<br/>{t('emptyLine2')}</p><div className="empty-shortcut"><kbd>⌘ / Ctrl</kbd><span>+</span><kbd>V</kbd><span>{t('pasteImage')}</span></div></div>}<CanvasResize width={doc.width} height={doc.height} zoom={zoom} disabled={!ready || busy || filling || !!dialog || !!textEdit} onResize={resizeCanvas} t={t}/></div>
           {dragOver && <div className="drop-message"><ImagePlus size={24}/>{t('dropImage')}</div>}
         </div>
-        <footer className="statusbar"><div className="status-left"><span className="status-dot"/><span>{t(saved)}</span><span className="status-size">{doc.width} × {doc.height} px</span></div><div className="zoom"><button className="icon-button" aria-label={t('zoomOut')} onClick={() => setZoom(z => Math.max(0.1, z - 0.1))}><Minus size={15}/></button><button className="zoom-value" title={t('zoom100')} onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%<ChevronDown size={12}/></button><button className="icon-button" aria-label={t('zoomIn')} onClick={() => setZoom(z => Math.min(3, z + 0.1))}><Plus size={15}/></button><span className="separator"/><button className="icon-button" aria-label={t('fitCanvas')} title={t('fitWindow')} onClick={() => fit()}><Maximize size={16}/></button></div></footer>
+        <footer className="statusbar"><div className="status-left"><span className="status-dot"/><span>{textEdit ? t('textHint') : t(saved)}</span><span className="status-size">{doc.width} × {doc.height} px</span></div><div className="zoom"><button className="icon-button" aria-label={t('zoomOut')} onClick={() => zoomTo(zoomRef.current / 1.2)}><Minus size={15}/></button><button className="zoom-value" title={t('zoom100')} onClick={() => zoomTo(1)}>{Math.round(zoom * 100)}%</button><button className="icon-button" aria-label={t('zoomIn')} onClick={() => zoomTo(zoomRef.current * 1.2)}><Plus size={15}/></button><span className="separator"/><button className="icon-button" aria-label={t('fitCanvas')} title={t('fitWindow')} onClick={() => fit()}><Maximize size={16}/></button></div></footer>
       </section>
     </main>
     <input ref={input} type="file" accept="image/*" hidden onChange={e => { const file = e.target.files?.[0]; if (file) void importImage(file); e.target.value = ''; }}/>
     {(notice || busy || filling) && <div className="toast" role="status">{filling ? t('filling') : busy ? t('openingImage') : notice ? t(notice) : ''}</div>}
-    {textEdit && <div className="modal-backdrop"><form className="modal" role="dialog" aria-modal="true" aria-labelledby="text-title" onSubmit={e => { e.preventDefault(); confirmText(); }}><div className="modal-heading"><h2 id="text-title">{textEdit.id ? t('editText') : t('addText')}</h2><button type="button" className="icon-button" aria-label={t('close')} onClick={() => setTextEdit(null)}><X size={20}/></button></div><textarea autoFocus aria-label={t('canvasText')} placeholder={t('textPlaceholder')} value={textEdit.value} onChange={e => setTextEdit({ ...textEdit, value: e.target.value })}/><p className="modal-hint">{t('textHint')}</p><div className="modal-actions"><button type="button" className="button" onClick={() => setTextEdit(null)}>{t('cancel')}</button><button className="button primary" type="submit">{t('done')}</button></div></form></div>}
     {dialog && <div className="modal-backdrop"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="modal-heading"><h2 id="dialog-title">{dialog === 'new' ? t('newCanvas') : t('helpTitle')}</h2><button autoFocus className="icon-button" aria-label={t('close')} onClick={() => setDialog(null)}><X size={20}/></button></div>{dialog === 'new' ? <><p>{t('replaceWarning')}</p><div className="size-inputs"><label>{t('width')}<input type="number" min="100" max="4096" value={newSize.width} onChange={e => setNewSize({ ...newSize, width: Number(e.target.value) })}/></label><span>×</span><label>{t('height')}<input type="number" min="100" max="4096" value={newSize.height} onChange={e => setNewSize({ ...newSize, height: Number(e.target.value) })}/></label></div><p className="modal-hint">{t('sizeHint')}</p><div className="modal-actions"><button className="button" onClick={() => setDialog(null)}>{t('cancel')}</button><button className="button primary" disabled={![newSize.width, newSize.height].every(n => Number.isInteger(n) && n >= 100 && n <= 4096)} onClick={() => { documentGeneration.current++; commit({ ...blank(), ...newSize }); setSelected(null); draftRef.current = null; setDraft(null); setDialog(null); fit(newSize.width, newSize.height); }}>{t('create')}</button></div></> : <><p>{t('helpIntro')}</p><div className="shortcuts"><div><span>{t('pasteShortcut')}</span><kbd>⌘ / Ctrl V</kbd></div><div><span>{t('undoRedo')}</span><kbd>⌘ / Ctrl ⇧ Z</kbd></div><div><span>{t('savePng')}</span><kbd>⌘ / Ctrl S</kbd></div><div><span>{t('deleteObject')}</span><kbd>Delete</kbd></div><div><span>{t('constrain')}</span><kbd>{t('shiftDraw')}</kbd></div></div><p className="modal-hint">{t('helpDetails')}</p><div className="modal-actions"><button className="button primary" onClick={() => setDialog(null)}>{t('gotIt')}</button></div></>}</div></div>}
   </div>;
 }

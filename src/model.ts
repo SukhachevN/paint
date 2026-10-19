@@ -4,6 +4,7 @@ export type Item = {
   id: string; type: Tool | 'image'; x: number; y: number; color: string; width: number;
   w?: number; h?: number; points?: number[]; text?: string; src?: string;
   scaleX?: number; scaleY?: number; rotation?: number;
+  fontSize?: number; fontFamily?: string;
   shapeStyle?: ShapeStyle; fillColor?: string;
 };
 export type Document = { version: 1; width: number; height: number; items: Item[] };

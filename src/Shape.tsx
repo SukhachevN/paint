@@ -18,6 +18,7 @@ export default function Shape({ item, movable, onSelect, onChange, onEdit }: Pro
     onClick: () => onSelect(item.id), onTap: () => onSelect(item.id),
     onPointerDown: () => onSelect(item.id),
     onDragStart: () => onSelect(item.id),
+    onDblTap: () => { if (item.type === 'text') onEdit(item); },
     onDblClick: () => { if (item.type === 'text') onEdit(item); },
     onDragEnd: (e: KonvaEventObject<DragEvent>) => onChange(item.id, { x: e.target.x(), y: e.target.y() }),
     onTransformEnd: (e: KonvaEventObject<Event>) => onChange(item.id, { x: e.target.x(), y: e.target.y(), scaleX: e.target.scaleX(), scaleY: e.target.scaleY(), rotation: e.target.rotation() }),
@@ -32,7 +33,7 @@ export default function Shape({ item, movable, onSelect, onChange, onEdit }: Pro
     case 'rect': return <Rect {...common} {...stroke} fill={fill} strokeEnabled={strokeEnabled} width={item.w} height={item.h} />;
     case 'ellipse': return <Ellipse {...common} {...stroke} fill={fill} strokeEnabled={strokeEnabled} radiusX={(item.w ?? 0) / 2} radiusY={(item.h ?? 0) / 2} offsetX={-(item.w ?? 0) / 2} offsetY={-(item.h ?? 0) / 2} />;
     case 'arrow': return <Arrow {...common} {...stroke} fill={item.color} points={item.points ?? []} pointerLength={12 + item.width} pointerWidth={10 + item.width} />;
-    case 'text': return <Text {...common} text={item.text} fill={item.color} fontSize={item.width * 2 + 18} fontFamily="Arial" />;
+    case 'text': return <Text {...common} text={item.text} fill={item.color} fontSize={item.fontSize ?? item.width * 2 + 18} fontFamily={item.fontFamily ?? 'Arial'} />;
     default: return <Line {...common} {...stroke} points={item.points ?? []} globalCompositeOperation={item.type === 'eraser' ? 'destination-out' : 'source-over'} />;
   }
 }

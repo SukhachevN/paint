@@ -12,12 +12,13 @@ A local drawing app for quick diagrams and screenshot annotations, inspired by M
 - Paste images from the clipboard, open files or drag them onto the canvas.
 - Outline, fill or both for rectangles and ellipses, with a separate fill color. Hold Shift for squares and circles.
 - Paint bucket fills a connected region on drawings or pasted images. A closed outline contains the fill; bucket fills can be undone or erased.
+- Type directly on the canvas with a choice of font, size and color. Enter finishes, Shift+Enter starts a new line, and Escape cancels. Text remains movable and editable, including its styling.
 - Select, move, scale and rotate objects. Selection bounds appear immediately when dragging. Double-click text to edit it.
 - Separate eraser size from 1 to 512 px (64 px by default). The eraser removes annotations and fills while preserving original images.
 - Clear the entire canvas with one button; undo restores its contents.
 - Resize using any part of the right or bottom edge, or the bottom-right corner. Hold the edge near the window boundary to keep expanding with automatic scrolling. Navigate oversized canvases using horizontal and vertical scrolling.
 - Resizing preserves artwork scale. Content outside a smaller canvas reappears when the canvas expands again. A dashed preview shows the new size; Escape cancels. Focus an edge and use arrow keys for 1 px adjustments, or Shift+arrows for 10 px.
-- Zoom controls and fit-to-window view. Canvas dimensions range from 100 to 4096 px per axis.
+- Cursor-anchored zoom with Ctrl/⌘ + mouse wheel or trackpad pinch; zoom buttons, keyboard shortcuts and fit-to-window view. Pan with Space + drag or the middle mouse button. Canvas dimensions range from 100 to 4096 px per axis.
 - Undo/redo for the last 50 actions, including canvas size changes.
 - Save or copy a PNG at the document's original resolution, without selection handles or UI.
 - Automatically save one draft locally and restore it when reopening the app.
@@ -77,6 +78,10 @@ The macOS app uses the system clipboard for image paste/copy and the native save
 | ⌘/Ctrl+Z | Undo |
 | ⌘/Ctrl+Shift+Z | Redo |
 | ⌘/Ctrl+S | Save PNG |
+| ⌘/Ctrl + + / − | Zoom in / out |
+| ⌘/Ctrl+0 | Fit canvas to window |
+| Space + drag / middle mouse drag | Pan the canvas |
+| Enter / Shift+Enter while editing text | Finish text / new line |
 | Delete / Backspace | Delete selected object |
 | Escape | Close dialog or cancel drawing/resize |
 | Shift while drawing | Square/circle or line direction in 45° steps |
